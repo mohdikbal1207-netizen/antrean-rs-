@@ -2,5 +2,10 @@
   command = "npm run build"
   publish = ".next"
 
+[build.environment]
+  # These Pusher connection settings are public and intentionally bundled by Next.js.
+  # Keep database credentials and the Pusher secret covered by secrets scanning.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_PUSHER_KEY,NEXT_PUBLIC_PUSHER_CLUSTER"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
