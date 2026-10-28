@@ -18,10 +18,10 @@ if (process.env.NODE_ENV !== 'production') globalForPool.pgPool = pool;
 
 // Inisialisasi Pusher Server
 const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID!,
-  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
-  secret: process.env.PUSHER_SECRET!,
-  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+  appId: process.env.PUSHER_APP_ID || '',
+  key: process.env.NEXT_PUBLIC_PUSHER_KEY || '',
+  secret: process.env.PUSHER_SECRET || '',
+  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || '',
   useTLS: true,
 });
 
@@ -53,11 +53,11 @@ export async function POST(req: NextRequest) {
     // Mulai Transaksi Database untuk Mencegah Race Condition Antar Loket
     await client.query('BEGIN');
 
-    // 1. Cari antrean terdepan yang belum dipanggil (loket = '0') hari ini dengan penguncian baris (FOR UPDATE)
+    // 1. Cari antrean terdepan yang belum dipanggil (loket = '0' atau NULL) hari ini (WIB) dengan penguncian baris (FOR UPDATE)
     const querySelect = `
       SELECT id, nomor_antrean 
       FROM antrean 
-      WHERE UPPER(loket) = '0' 
+      WHERE (loket = '0' OR loket IS NULL) 
         AND (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date 
         AND UPPER(nomor_antrean) LIKE $1 
       ORDER BY id ASC 
@@ -65,10 +65,10 @@ export async function POST(req: NextRequest) {
       FOR UPDATE
     `;
     
-    const resSelect = await client.query(querySelect, [`${kat}-%`]);
+    const resSelect = await client.query(querySelect, [`${kat}%`]);
 
     if (resSelect.rows.length === 0) {
-      await client.query('COMMIT'); // Commit kosong untuk melepas lock transaksi
+      await client.query('COMMIT'); // Commit untuk melepas lock transaksi
       return NextResponse.json(
         {
           success: false,
@@ -80,10 +80,10 @@ export async function POST(req: NextRequest) {
 
     const antreanNext = resSelect.rows[0];
 
-    // 2. Update status ke loket bersangkutan dan perbarui waktu panggil dengan zona waktu WIB
+    // 2. Update status ke nomor loket bersangkutan dan perbarui waktu panggil dalam zona waktu WIB
     const queryUpdate = `
       UPDATE antrean 
-      SET loket = $1, waktu_panggil = CURRENT_TIMESTAMP 
+      SET loket = $1, waktu_panggil = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta' 
       WHERE id = $2 
       RETURNING id, nomor_antrean, loket, waktu_panggil
     `;
@@ -93,19 +93,25 @@ export async function POST(req: NextRequest) {
     // Commit transaksi database
     await client.query('COMMIT');
 
-    // 3. Kirim event Pusher real-time ke Kiosk / Display Layar Antrean
-    await pusher.trigger('antrean-channel', 'event-panggil', {
-      id: resUpdate.rows[0]?.id,
-      nomor_antrean: antreanNext.nomor_antrean,
-      loket: loket,
-      waktu_panggil: resUpdate.rows[0]?.waktu_panggil,
-    });
+    const dataUpdated = resUpdate.rows[0];
+
+    // 3. Kirim event Pusher real-time ke Display/Kiosk (dibungkus try-catch agar API tidak crash jika Pusher gagal)
+    try {
+      await pusher.trigger('antrean-channel', 'event-panggil', {
+        id: dataUpdated?.id,
+        nomor_antrean: antreanNext.nomor_antrean,
+        loket: loket,
+        waktu_panggil: dataUpdated?.waktu_panggil,
+      });
+    } catch (pusherErr) {
+      console.error('Warning Pusher Trigger Error (Panggil-Next):', pusherErr);
+    }
 
     return NextResponse.json(
       {
         success: true,
         message: `Antrean ${antreanNext.nomor_antrean} berhasil dipanggil ke Loket ${loket}`,
-        data: resUpdate.rows[0],
+        data: dataUpdated,
         nomor_antrean: antreanNext.nomor_antrean,
         timestamp: new Date().toISOString(),
       },
@@ -131,12 +137,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         success: false, 
-        message: 'Gagal memanggil antrean berikutnya dari database' 
+        message: 'Gagal memanggil antrean berikutnya dari database',
+        error_detail: error?.message || null,
       },
       { status: 500 }
     );
   } finally {
-    // Selalu kembalikan client ke pool agar tidak terjadi kebocoran koneksi
+    // Kembalikan client ke pool
     if (client) {
       client.release();
     }

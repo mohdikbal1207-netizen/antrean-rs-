@@ -1,7 +1,8 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { Pool } from 'pg';
+import Pusher from 'pusher';
 
-// Mencegah pembuatan pool baru secara berulang saat Next.js melakukan hot-reload di mode development
+// Mencegah pembuatan pool baru secara berulang saat Next.js hot-reload di mode development
 const globalForPool = globalThis as unknown as { pgPool: Pool };
 
 const pool =
@@ -14,6 +15,15 @@ const pool =
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPool.pgPool = pool;
+
+// Inisialisasi Pusher Server
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID || '',
+  key: process.env.NEXT_PUBLIC_PUSHER_KEY || '',
+  secret: process.env.PUSHER_SECRET || '',
+  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || '',
+  useTLS: true,
+});
 
 export async function POST(req: NextRequest) {
   let client;
@@ -29,13 +39,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ambil koneksi dari pool
     client = await pool.connect();
 
-    // Query update status loket menjadi 'SKIP' dengan filter zona waktu WIB (Asia/Jakarta)
+    // Query update status loket menjadi 'SKIP' dengan penetapan zona waktu WIB
     const queryUpdate = `
       UPDATE antrean 
-      SET loket = 'SKIP', waktu_panggil = CURRENT_TIMESTAMP 
+      SET loket = 'SKIP', waktu_panggil = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta' 
       WHERE UPPER(nomor_antrean) = $1 
         AND (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
       RETURNING id, nomor_antrean, loket, waktu_panggil
@@ -54,11 +63,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const dataSkip = result.rows[0];
+
+    // Kirim event Pusher real-time ke Display/Kiosk
+    try {
+      await pusher.trigger('antrean-channel', 'event-skip', {
+        id: dataSkip.id,
+        nomor_antrean: dataSkip.nomor_antrean,
+        loket: 'SKIP',
+        waktu_panggil: dataSkip.waktu_panggil,
+      });
+    } catch (pusherErr) {
+      console.error('Warning Pusher Trigger Error (Panggil-Skip):', pusherErr);
+    }
+
     return NextResponse.json(
       {
         success: true,
         message: `Antrean ${nomor} berhasil dilewati (SKIP).`,
-        data: result.rows[0],
+        data: dataSkip,
         timestamp: new Date().toISOString(),
       },
       { status: 200 }
@@ -74,12 +97,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         success: false, 
-        message: 'Gagal memproses aksi skip antrean ke database' 
+        message: 'Gagal memproses aksi skip antrean ke database',
+        error_detail: error?.message || null,
       },
       { status: 500 }
     );
   } finally {
-    // Selalu kembalikan client ke pool agar tidak terjadi kebocoran koneksi
     if (client) {
       client.release();
     }

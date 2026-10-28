@@ -9,6 +9,64 @@ interface AntreanData {
   status?: string;
 }
 
+// ==========================================
+// FUNGSI TERBILANG BAHASA INDONESIA LENGKAP
+// ==========================================
+
+function terbilang(n: number): string {
+  if (n === 0) return "nol";
+
+  const satuan = [
+    "",
+    "satu",
+    "dua",
+    "tiga",
+    "empat",
+    "lima",
+    "enam",
+    "tujuh",
+    "delapan",
+    "sembilan",
+    "sepuluh",
+    "sebelas",
+  ];
+
+  if (n < 12) {
+    return satuan[n];
+  } else if (n < 20) {
+    return terbilang(n - 10) + " belas";
+  } else if (n < 100) {
+    return (terbilang(Math.floor(n / 10)) + " puluh " + terbilang(n % 10)).trim();
+  } else if (n < 200) {
+    return ("seratus " + terbilang(n % 100)).trim();
+  } else if (n < 1000) {
+    return (terbilang(Math.floor(n / 100)) + " ratus " + terbilang(n % 100)).trim();
+  } else if (n < 2000) {
+    return ("seribu " + terbilang(n % 1000)).trim();
+  } else if (n < 1000000) {
+    return (terbilang(Math.floor(n / 1000)) + " ribu " + terbilang(n % 1000)).trim();
+  } else {
+    return n.toString();
+  }
+}
+
+function formatNomorAntreanTTS(nomorAntrean: string): string {
+  if (!nomorAntrean || nomorAntrean === "---") return "";
+
+  const cleanNomor = nomorAntrean.trim().toUpperCase();
+  const match = cleanNomor.match(/^([A-Z]+)[-]?(\d+)$/);
+
+  if (match) {
+    const kodeHuruf = match[1];
+    const angkaInt = parseInt(match[2], 10);
+    const sebutanAngka = terbilang(angkaInt);
+
+    return `${kodeHuruf}, ${sebutanAngka}`;
+  }
+
+  return cleanNomor.split("").join(" ");
+}
+
 export default function KioskPage() {
   const [antrean, setAntrean] = useState<AntreanData>({ nomor: "---", loket: "-" });
   const [riwayat, setRiwayat] = useState<AntreanData[]>([]);
@@ -17,7 +75,6 @@ export default function KioskPage() {
   const [kategoriLoading, setKategoriLoading] = useState<string | null>(null);
   const [tiketBaru, setTiketBaru] = useState<{ nomor: string; waktu: string } | null>(null);
 
-  // Fitur Socket, Modal Dialog Pratinjau Tiket, & Jumlah Menunggu Per Kategori
   const [isSocketConnected, setIsSocketConnected] = useState<boolean>(true);
   const [showModalTiket, setShowModalTiket] = useState<boolean>(false);
   const [sisaAntrean, setSisaAntrean] = useState<{ A: number; B: number; C: number; P: number }>({
@@ -27,44 +84,35 @@ export default function KioskPage() {
     P: 0,
   });
 
-  // Mode Fullscreen, Mode Gelap/Terang, & Fitur Suara Kiosk
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
 
-  // Pengaturan Suara TTS, Counter Tiket Hari Ini, & Panel Setting Popover
   const [voiceRate, setVoiceRate] = useState<number>(0.85);
   const [showVoiceSettings, setShowVoiceSettings] = useState<boolean>(false);
   const [totalTiketHariIni, setTotalTiketHariIni] = useState<number>(0);
 
-  // Dynamic Running Text & TTS Warning Status
   const [runningIndex, setRunningIndex] = useState<number>(0);
   const [isTtsSupported, setIsTtsSupported] = useState<boolean>(true);
 
-  // Status Printer Thermal & Audio Unlocked Flag
   const [isPrinterReady, setIsPrinterReady] = useState<boolean>(true);
   const [isAudioUnlocked, setIsAudioUnlocked] = useState<boolean>(false);
   const [paperWidth, setPaperWidth] = useState<"58mm" | "80mm">("80mm");
 
-  // Animasi Flash Pulse Panggilan Baru & Ref Lock Debounce
   const [isCallFlashing, setIsCallFlashing] = useState<boolean>(false);
   const isCetakDebounce = useRef<boolean>(false);
 
-  // Antrean Audio Playback Queue Prevent Overlap
   const audioQueueRef = useRef<Array<{ nomor: string; loket: string }>>([]);
   const isSpeakingRef = useRef<boolean>(false);
 
-  // Daftar Pesan Running Text Berjalan
   const pesanInformasi = [
     "Selamat Datang di RSUD Bukit Kerman Kabupaten Kerinci • Utamakan Keselamatan & Ketertiban • Mohon Menunggu Nomor Antrean Dipanggil",
     "Pendaftaran Poliklinik Buka Setiap Hari Kerja • Harap Menyiapkan KTP / Kartu BPJS Kesehatan / Surat Rujukan",
     "Budayakan Mengantre dengan Tertib • Selalu Jaga Kebersihan Lingkungan Rumah Sakit • Salam Sehat RSUD Bukit Kerman",
   ];
 
-  // Total Seluruh Antrean Menunggu
   const totalMenunggu = sisaAntrean.A + sisaAntrean.B + sisaAntrean.C + sisaAntrean.P;
 
-  // Unlock Web Audio Context pada Sentuhan Pertama (Bypass Browser Autoplay Policy)
   const unlockAudioContext = () => {
     if (isAudioUnlocked) return;
     try {
@@ -77,11 +125,10 @@ export default function KioskPage() {
       }
       setIsAudioUnlocked(true);
     } catch (e) {
-      // Fallback silent
+      // Fallback
     }
   };
 
-  // Update Jam Digital Real-Time & Rotasi Dynamic Running Text
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -93,7 +140,6 @@ export default function KioskPage() {
         })
       );
 
-      // Auto Reset State Lokal pada Pukul 00:00:00 WIB
       if (now.getHours() === 0 && now.getMinutes() === 0 && now.getSeconds() === 0) {
         setAntrean({ nomor: "---", loket: "-" });
         setRiwayat([]);
@@ -105,12 +151,10 @@ export default function KioskPage() {
       setRunningIndex((prev) => (prev + 1) % pesanInformasi.length);
     }, 15000);
 
-    // Cek Dukungan Browser Speech Synthesis API
     if (typeof window !== "undefined" && !("speechSynthesis" in window)) {
       setIsTtsSupported(false);
     }
 
-    // Mencegah Menu Klik Kanan (Kiosk Safeguard)
     const disableContextMenu = (e: MouseEvent) => e.preventDefault();
     document.addEventListener("contextmenu", disableContextMenu);
 
@@ -121,7 +165,6 @@ export default function KioskPage() {
     };
   }, []);
 
-  // Fungsi Toggle Mode Fullscreen Browser
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
@@ -132,7 +175,6 @@ export default function KioskPage() {
     }
   };
 
-  // Fungsi Ambil Data Sisa Antrean Menunggu dari Server
   const ambilSisaAntrean = async () => {
     try {
       const res = await fetch("/api/antrean-menunggu");
@@ -153,7 +195,6 @@ export default function KioskPage() {
     }
   };
 
-  // Ambil data antrean terakhir dari Database saat halaman dibuka/refresh
   const ambilRiwayatAwal = async () => {
     try {
       const res = await fetch("/api/riwayat");
@@ -175,7 +216,6 @@ export default function KioskPage() {
     return () => clearInterval(intervalSisa);
   }, []);
 
-  // Fallback Polling jika Socket terputus
   useEffect(() => {
     if (isSocketConnected) return;
     const fallbackInterval = setInterval(() => {
@@ -185,7 +225,6 @@ export default function KioskPage() {
     return () => clearInterval(fallbackInterval);
   }, [isSocketConnected]);
 
-  // Sound Synthesizer Chime (Ding-Dong)
   const bunyikanChime = () => {
     if (!isAudioEnabled) return;
     try {
@@ -193,7 +232,6 @@ export default function KioskPage() {
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       
-      // Pitch 1 (Ding)
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = "sine";
@@ -205,7 +243,6 @@ export default function KioskPage() {
       osc1.start();
       osc1.stop(ctx.currentTime + 0.3);
 
-      // Pitch 2 (Dong)
       setTimeout(() => {
         const osc2 = ctx.createOscillator();
         const gain2 = ctx.createGain();
@@ -220,11 +257,10 @@ export default function KioskPage() {
       }, 200);
 
     } catch (e) {
-      // Fallback silent
+      // Fallback
     }
   };
 
-  // Sound Effect Klik Cetak Tiket
   const bunyikanBeepKlik = () => {
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -245,7 +281,6 @@ export default function KioskPage() {
     }
   };
 
-  // Pemrosesan Antrean Suara Berurutan (Sequential TTS Queue Processor)
   const processAudioQueue = () => {
     if (isSpeakingRef.current || audioQueueRef.current.length === 0 || !isAudioEnabled || !("speechSynthesis" in window)) {
       return;
@@ -259,12 +294,20 @@ export default function KioskPage() {
     bunyikanChime();
 
     setTimeout(() => {
-      const kepinganNomor = item.nomor.replace("-", " ").split("").join(" ");
-      const teks = `Nomor antrean, ${kepinganNomor}, silakan menuju, ${item.loket.toLowerCase().includes("loket") ? item.loket : "loket " + item.loket}`;
+      const sebutanJelas = formatNomorAntreanTTS(item.nomor);
+      const namaLoket = item.loket.toLowerCase().includes("loket") ? item.loket : "loket " + item.loket;
+      const teks = `Nomor antrean, ${sebutanJelas}, silakan menuju ke ${namaLoket}`;
+      
       const utterance = new SpeechSynthesisUtterance(teks);
       utterance.lang = "id-ID";
       utterance.rate = voiceRate;
       utterance.pitch = 1.0;
+
+      const voices = window.speechSynthesis.getVoices();
+      const indonesianVoice = voices.find((v) => v.lang.includes("id") || v.lang.includes("ID"));
+      if (indonesianVoice) {
+        utterance.voice = indonesianVoice;
+      }
       
       utterance.onend = () => {
         isSpeakingRef.current = false;
@@ -285,14 +328,12 @@ export default function KioskPage() {
     processAudioQueue();
   };
 
-  // Ulangi Suara Panggilan Aktif
   const handleUlangiPanggilan = () => {
     if (antrean.nomor !== "---" && antrean.loket !== "-") {
       panggilSuara(antrean.nomor, antrean.loket);
     }
   };
 
-  // FITUR BARU: Memanggil ulang antrean langsung dari item riwayat
   const handlePanggilDariRiwayat = (item: AntreanData) => {
     unlockAudioContext();
     bunyikanBeepKlik();
@@ -304,14 +345,12 @@ export default function KioskPage() {
     panggilSuara(item.nomor, item.loket);
   };
 
-  // Manual Reset & Sync Data Kiosk
   const handleSyncManual = () => {
     bunyikanBeepKlik();
     ambilRiwayatAwal();
     ambilSisaAntrean();
   };
 
-  // Mendengarkan Realtime dari Pusher WebSocket
   useEffect(() => {
     const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
       cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
@@ -327,7 +366,6 @@ export default function KioskPage() {
       setAntrean(dataBaru);
       setRiwayat((prev) => [dataBaru, ...prev.slice(0, 4)]);
       
-      // Trigger Efek Flash Visual Panggilan Aktif
       setIsCallFlashing(true);
       setTimeout(() => setIsCallFlashing(false), 3000);
 
@@ -340,7 +378,6 @@ export default function KioskPage() {
     };
   }, [isAudioEnabled, voiceRate]);
 
-  // Fungsi Ambil & Cetak Tiket Langsung di Kiosk
   const handleAmbilTiket = async (kategori: string) => {
     if (loadingCetak || isCetakDebounce.current) return;
     isCetakDebounce.current = true;
@@ -366,7 +403,6 @@ export default function KioskPage() {
         setShowModalTiket(true);
         ambilSisaAntrean();
 
-        // Cetak struk via printer thermal browser
         setTimeout(() => {
           window.print();
         }, 400);
@@ -388,7 +424,6 @@ export default function KioskPage() {
     }
   };
 
-  // Keyboard Event Listener untuk Cetak Tiket Langsung (Shortcut Kiosk Keyboard/Keypad)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -430,7 +465,6 @@ export default function KioskPage() {
         }
       `}</style>
       
-      {/* Pop-up Modal Pratinjau Tiket Mandiri Kontras Tinggi */}
       {showModalTiket && tiketBaru && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 print:hidden">
           <div className={`border-4 p-8 rounded-3xl max-w-md w-full text-center shadow-2xl space-y-5 animate-bounce ${
@@ -460,7 +494,6 @@ export default function KioskPage() {
         </div>
       )}
 
-      {/* Popover Pengaturan Kecepatan Suara & Kertas Thermal (Panel Setting) */}
       {showVoiceSettings && (
         <div className="fixed top-24 right-6 z-40 bg-slate-900 border-2 border-purple-500 p-5 rounded-2xl shadow-2xl text-white space-y-4 w-72 print:hidden">
           <h4 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center justify-between">
@@ -508,7 +541,6 @@ export default function KioskPage() {
         </div>
       )}
 
-      {/* HEADER BAR LENGKAP DENGAN TOGGLE THEME & FULLSCREEN */}
       <header className={`print:hidden border-2 rounded-2xl p-4 sm:p-6 flex flex-wrap justify-between items-center shadow-2xl gap-4 transition-colors ${
         isDarkMode ? "bg-slate-900 border-slate-700" : "bg-white border-slate-300 shadow-slate-200"
       }`}>
@@ -543,10 +575,7 @@ export default function KioskPage() {
           </div>
         </div>
 
-        {/* Control Action Buttons (Theme Switcher, Fullscreen, Suara & Jam) */}
         <div className="flex items-center space-x-3">
-          
-          {/* Tombol Refresh / Sync Manual Kiosk */}
           <button
             onClick={handleSyncManual}
             className={`p-3 rounded-xl border-2 font-black text-xs transition flex items-center gap-1.5 cursor-pointer ${
@@ -557,7 +586,6 @@ export default function KioskPage() {
             <span>🔄 Sync</span>
           </button>
 
-          {/* Toggle Suara & Pengaturan */}
           <div className="flex items-center space-x-1">
             <button
               onClick={() => setIsAudioEnabled(!isAudioEnabled)}
@@ -579,7 +607,6 @@ export default function KioskPage() {
             </button>
           </div>
 
-          {/* Toggle Fullscreen */}
           <button
             onClick={toggleFullscreen}
             className={`p-3 rounded-xl border-2 font-black text-xs transition flex items-center gap-1.5 cursor-pointer ${
@@ -590,7 +617,6 @@ export default function KioskPage() {
             <span>{isFullscreen ? "↙️ Normal" : "⛶ Fullscreen"}</span>
           </button>
 
-          {/* Toggle Light / Dark Mode */}
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
             className={`p-3 rounded-xl border-2 font-black text-xs transition flex items-center gap-1.5 cursor-pointer ${
@@ -601,7 +627,6 @@ export default function KioskPage() {
             <span>{isDarkMode ? "☀️ Mode Terang" : "🌙 Mode Gelap"}</span>
           </button>
 
-          {/* Jam Digital */}
           <div className={`border-2 px-5 py-2 rounded-2xl text-right shadow-md ${
             isDarkMode ? "bg-black border-yellow-400" : "bg-slate-950 border-blue-600 text-white"
           }`}>
@@ -611,20 +636,14 @@ export default function KioskPage() {
         </div>
       </header>
 
-      {/* STRIP NOTIFIKASI KIOSK WARNING STATUS */}
       {!isTtsSupported && (
         <div className="print:hidden my-2 bg-amber-600 text-black font-black text-xs py-2 px-4 rounded-xl border-2 border-white text-center">
           ⚠️ Perhatian: Fitur Text-to-Speech (TTS) tidak didukung pada browser kiosk ini. Fitur audio chime tetap aktif.
         </div>
       )}
 
-      {/* TAMPILAN MONITOR UTAMA */}
       <main className="print:hidden grid grid-cols-1 lg:grid-cols-3 gap-6 my-6 flex-grow">
-        
-        {/* Utama: Display Panggilan Aktif & Tombol Tiket */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-          
-          {/* Box Panggilan Aktif (Flash Pulse saat Antrean Dipanggil) */}
           <div className={`border-4 rounded-3xl p-6 flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden flex-grow min-h-[300px] transition-all duration-300 ${
             isCallFlashing ? "ring-8 ring-yellow-400 scale-[1.01]" : ""
           } ${
@@ -639,7 +658,6 @@ export default function KioskPage() {
                 PANGGILAN AKTIF DIPANGGIL
               </span>
               
-              {/* Badge Status Beban Ruang Tunggu */}
               <span className={`text-xs font-black px-4 py-1.5 rounded-full border-2 ${
                 totalMenunggu > 20 
                   ? "bg-rose-600 text-white border-white animate-bounce" 
@@ -650,7 +668,6 @@ export default function KioskPage() {
                 {totalMenunggu > 20 ? "🔥 Ruang Tunggu Padat" : totalMenunggu > 10 ? "⚠️ Antrean Sedang" : "✅ Antrean Lancar"}
               </span>
 
-              {/* Tombol Ulangi Panggilan */}
               <button
                 onClick={handleUlangiPanggilan}
                 className="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black px-4 py-1.5 rounded-full border-2 border-white shadow-md cursor-pointer transition"
@@ -673,7 +690,6 @@ export default function KioskPage() {
             </div>
           </div>
 
-          {/* Area Tombol Cetak Tiket Mandiri Kontras Tinggi */}
           <div className={`border-2 rounded-3xl p-6 shadow-2xl transition-colors ${
             isDarkMode ? "bg-slate-900 border-slate-700" : "bg-white border-slate-300"
           }`}>
@@ -684,8 +700,6 @@ export default function KioskPage() {
             </h3>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              
-              {/* Loket A - Pendaftaran */}
               <button
                 onClick={() => handleAmbilTiket("A")}
                 disabled={loadingCetak}
@@ -704,7 +718,6 @@ export default function KioskPage() {
                 <span className="text-[10px] text-blue-200 mt-1 font-mono font-bold">Est. ~{sisaAntrean.A * 3} mnt</span>
               </button>
 
-              {/* Loket B - Kasir */}
               <button
                 onClick={() => handleAmbilTiket("B")}
                 disabled={loadingCetak}
@@ -723,7 +736,6 @@ export default function KioskPage() {
                 <span className="text-[10px] text-emerald-200 mt-1 font-mono font-bold">Est. ~{sisaAntrean.B * 3} mnt</span>
               </button>
 
-              {/* Loket C - Farmasi */}
               <button
                 onClick={() => handleAmbilTiket("C")}
                 disabled={loadingCetak}
@@ -742,7 +754,6 @@ export default function KioskPage() {
                 <span className="text-[10px] text-amber-200 mt-1 font-mono font-bold">Est. ~{sisaAntrean.C * 3} mnt</span>
               </button>
 
-              {/* Loket P - Prioritas / Lansia */}
               <button
                 onClick={() => handleAmbilTiket("P")}
                 disabled={loadingCetak}
@@ -760,12 +771,10 @@ export default function KioskPage() {
                 </span>
                 <span className="text-[10px] text-rose-200 mt-1 font-mono font-bold">Est. ~{sisaAntrean.P * 3} mnt</span>
               </button>
-
             </div>
           </div>
         </div>
 
-        {/* Sidebar: Riwayat Antrean (Dapat Diklik untuk Panggil Ulang) */}
         <div className={`border-2 rounded-3xl p-6 flex flex-col shadow-2xl transition-colors ${
           isDarkMode ? "bg-slate-900 border-slate-700" : "bg-white border-slate-300"
         }`}>
@@ -810,7 +819,6 @@ export default function KioskPage() {
         </div>
       </main>
 
-      {/* FOOTER (DYNAMIC DYNAMIC RUNNING TEXT MARQUEE) */}
       <footer className="print:hidden bg-blue-600 border-2 border-white rounded-2xl p-3.5 text-center overflow-hidden shadow-2xl relative">
         <div className="whitespace-nowrap inline-block animate-[marquee_25s_linear_infinite]">
           <p className="text-base font-black text-white tracking-wider">
@@ -819,7 +827,6 @@ export default function KioskPage() {
         </div>
       </footer>
 
-      {/* STRUK TIKET THERMAL (HANYA DICETAK PRINTER 80mm/58mm BARCODE READY) */}
       {tiketBaru && (
         <div className={`hidden print:block font-mono text-black text-center p-2 mx-auto leading-tight ${
           paperWidth === "58mm" ? "max-w-[58mm] text-[10px]" : "max-w-[80mm]"
@@ -833,7 +840,6 @@ export default function KioskPage() {
             {tiketBaru.nomor}
           </div>
           
-          {/* BARCODE VISUAL PATTERN SIMULATED FOR THERMAL PRINTER */}
           <div className="my-2 flex flex-col items-center justify-center">
             <div className="h-8 w-44 bg-slate-950 flex items-center justify-around px-1">
               <div className="w-1 h-full bg-white"></div>

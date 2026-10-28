@@ -25,9 +25,8 @@ export async function GET(request: NextRequest) {
   const pageParam = searchParams.get('page');
   const kategoriParam = searchParams.get('kategori');
 
-  let limitValue = limitParam ? parseInt(limitParam, 10) : 50;
-  if (isNaN(limitValue) || limitValue <= 0) limitValue = 50;
-  if (limitValue > 200) limitValue = 200;
+  let limitValue = limitParam ? parseInt(limitParam, 10) : 100;
+  if (isNaN(limitValue) || limitValue <= 0) limitValue = 100;
 
   let pageValue = pageParam ? parseInt(pageParam, 10) : 1;
   if (isNaN(pageValue) || pageValue <= 0) pageValue = 1;
@@ -37,8 +36,7 @@ export async function GET(request: NextRequest) {
   try {
     client = await pool.connect();
 
-    // 🔄 AUTO-RESET OTOMATIS: 
-    // Menghapus data antrean dari hari sebelumnya berdasarkan tanggal pada waktu_panggil (WIB)
+    // 🔄 AUTO-RESET OTOMATIS: Hapus data antrean hari kemarin (WIB)
     await client.query(`
       DELETE FROM antrean 
       WHERE (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
@@ -58,7 +56,8 @@ export async function GET(request: NextRequest) {
       queryParamsCount.push(`${kategoriParam.toUpperCase()}%`);
     }
 
-    // Query antrean MENUNGGU (Hanya memfilter tanggal hari ini dari waktu_panggil)
+    // 💡 HANYA AMBIL YANG BELUM DIPANGGIL (loket = '0' ATAU loket IS NULL)
+    // Supaya yang sudah dipanggil Loket 1, 2, 3 atau SKIP TIDAK TAMPIL LAGI!
     const queryData = `
       SELECT 
         id, 
@@ -66,7 +65,7 @@ export async function GET(request: NextRequest) {
         loket,
         waktu_panggil
       FROM antrean 
-      WHERE (loket = '0' OR loket IS NULL OR UPPER(loket) != 'SKIP')
+      WHERE (loket = '0' OR loket IS NULL)
         AND (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
         ${kategoriConditionData}
       ORDER BY id ASC
@@ -76,7 +75,7 @@ export async function GET(request: NextRequest) {
     const queryCount = `
       SELECT COUNT(*) as total_hari_ini
       FROM antrean 
-      WHERE (loket = '0' OR loket IS NULL OR UPPER(loket) != 'SKIP')
+      WHERE (loket = '0' OR loket IS NULL)
         AND (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
         ${kategoriConditionCount}
     `;

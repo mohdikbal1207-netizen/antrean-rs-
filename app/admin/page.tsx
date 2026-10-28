@@ -16,6 +16,70 @@ interface LogAksiItem {
   tipe: "panggil" | "skip" | "selesai" | "transfer" | "reset";
 }
 
+// ==========================================
+// FUNGSI TERBILANG BAHASA INDONESIA LENGKAP
+// ==========================================
+
+// Konversi angka menjadi sebutan terbilang alami (satuan, belasan, puluhan, ratusan, ribuan, jutaan)
+function terbilang(n: number): string {
+  if (n === 0) return "nol";
+
+  const satuan = [
+    "",
+    "satu",
+    "dua",
+    "tiga",
+    "empat",
+    "lima",
+    "enam",
+    "tujuh",
+    "delapan",
+    "sembilan",
+    "sepuluh",
+    "sebelas",
+  ];
+
+  if (n < 12) {
+    return satuan[n];
+  } else if (n < 20) {
+    return terbilang(n - 10) + " belas";
+  } else if (n < 100) {
+    return (terbilang(Math.floor(n / 10)) + " puluh " + terbilang(n % 10)).trim();
+  } else if (n < 200) {
+    return ("seratus " + terbilang(n % 100)).trim();
+  } else if (n < 1000) {
+    return (terbilang(Math.floor(n / 100)) + " ratus " + terbilang(n % 100)).trim();
+  } else if (n < 2000) {
+    return ("seribu " + terbilang(n % 1000)).trim();
+  } else if (n < 1000000) {
+    return (terbilang(Math.floor(n / 1000)) + " ribu " + terbilang(n % 1000)).trim();
+  } else {
+    return n.toString();
+  }
+}
+
+// Format nomor antrean agar dibaca jelas oleh TTS (contoh: "A-011" -> "A, sebelas", "B-1250" -> "B, seribu dua ratus lima puluh")
+function formatNomorAntreanTTS(nomorAntrean: string): string {
+  if (!nomorAntrean) return "";
+
+  const cleanNomor = nomorAntrean.trim().toUpperCase();
+  const match = cleanNomor.match(/^([A-Z]+)[-]?(\d+)$/);
+
+  if (match) {
+    const kodeHuruf = match[1];
+    const angkaInt = parseInt(match[2], 10); // Menghilangkan 0 di depan
+    const sebutanAngka = terbilang(angkaInt);
+
+    return `${kodeHuruf}, ${sebutanAngka}`;
+  }
+
+  return cleanNomor.split("").join(" ");
+}
+
+// ==========================================
+// KOMPONEN UTAMA HALAMAN ADMIN
+// ==========================================
+
 export default function AdminPage() {
   const [nomor, setNomor] = useState("");
   const [loket, setLoket] = useState("1");
@@ -64,12 +128,22 @@ export default function AdminPage() {
     if (!suaraTTS || typeof window === "undefined" || !("speechSynthesis" in window)) return;
     try {
       window.speechSynthesis.cancel(); // Hentikan antrean suara sebelumnya
-      const kepingan = nomorAntrean.replace("-", " ").split("").join(" ");
-      const teksPengumuman = `Nomor antrean ${kepingan}, silakan menuju ke loket ${targetLoket}`;
+
+      const sebutanJelas = formatNomorAntreanTTS(nomorAntrean);
+      const teksPengumuman = `Nomor antrean ${sebutanJelas}, silakan menuju ke loket ${targetLoket}`;
+      
       const utterance = new SpeechSynthesisUtterance(teksPengumuman);
       utterance.lang = "id-ID";
-      utterance.rate = 0.88;
+      utterance.rate = 0.85; // Kecepatan disesuaikan agar artikulasi suara alami & jelas
       utterance.pitch = 1.0;
+
+      // Utamakan penggunaan vokal Bahasa Indonesia jika tersedia di browser
+      const voices = window.speechSynthesis.getVoices();
+      const indonesianVoice = voices.find((v) => v.lang.includes("id") || v.lang.includes("ID"));
+      if (indonesianVoice) {
+        utterance.voice = indonesianVoice;
+      }
+
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.error("Gagal memutar TTS:", e);
@@ -209,6 +283,19 @@ export default function AdminPage() {
     if (nomorAntrean.startsWith("C")) return "bg-amber-900/40 text-amber-300 border-amber-700/40";
     if (nomorAntrean.startsWith("P")) return "bg-rose-900/40 text-rose-300 border-rose-700/40";
     return "bg-slate-800 text-slate-300 border-slate-700";
+  };
+
+  // Format Pembantu Tampilan Jam & Tanggal Tiket
+  const formatWaktuTiket = (isoString?: string) => {
+    if (!isoString) return { jam: "Pilih nomor", tanggal: "" };
+    try {
+      const d = new Date(isoString);
+      const jam = d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB";
+      const tanggal = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+      return { jam, tanggal };
+    } catch {
+      return { jam: "Pilih nomor", tanggal: "" };
+    }
   };
 
   const ambilAntreanMenunggu = async () => {
@@ -423,10 +510,9 @@ export default function AdminPage() {
     kirimPanggilan(nomor);
   };
 
-  // Pintas Keyboard Lengkap (Alt+N, Alt+R, Alt+S, Alt+D, Alt+K, Alt+M) - Diperbaiki agar aman saat mengetik input
+  // Pintas Keyboard Lengkap (Alt+N, Alt+R, Alt+S, Alt+D, Alt+K, Alt+M)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Abaikan jika fokus sedang berada di dalam input text/select untuk mencegah bentrok
       if (["INPUT", "SELECT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
 
       if (e.altKey && e.key.toLowerCase() === "n") {
@@ -987,32 +1073,37 @@ export default function AdminPage() {
                     <p>{pencarian ? "Nomor tidak ditemukan" : "Belum ada antrean baru yang menunggu."}</p>
                   </div>
                 ) : (
-                  daftarMenungguFiltered.map((item, idx) => (
-                    <div
-                      key={item.id}
-                      onClick={() => setNomor(item.nomor_antrean)}
-                      className="bg-slate-950 border border-slate-800 hover:border-blue-500 p-3.5 rounded-xl flex items-center justify-between cursor-pointer transition group"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <span className={`text-xs font-black px-2.5 py-1 rounded-md border ${getBadgeWarna(item.nomor_antrean)}`}>
-                          {item.nomor_antrean}
-                        </span>
-                        <div>
-                          <p className="text-[11px] text-slate-400">Pilih nomor</p>
-                          <p className="text-[9px] font-mono text-slate-500">Est. ~{idx * 3} mnt</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          lewatiAntrean(item.nomor_antrean);
-                        }}
-                        className="bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white text-[10px] font-extrabold px-2.5 py-1.5 rounded-lg border border-amber-500/30 transition cursor-pointer"
+                  daftarMenungguFiltered.map((item, idx) => {
+                    const infoWaktu = formatWaktuTiket(item.waktu_panggil);
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => setNomor(item.nomor_antrean)}
+                        className="bg-slate-950 border border-slate-800 hover:border-blue-500 p-3.5 rounded-xl flex items-center justify-between cursor-pointer transition group"
                       >
-                        SKIP
-                      </button>
-                    </div>
-                  ))
+                        <div className="flex items-center space-x-3">
+                          <span className={`text-xs font-black px-2.5 py-1 rounded-md border ${getBadgeWarna(item.nomor_antrean)}`}>
+                            {item.nomor_antrean}
+                          </span>
+                          <div>
+                            <p className="text-[11px] text-slate-300 font-semibold">
+                              {infoWaktu.jam} {infoWaktu.tanggal && <span className="text-[10px] text-slate-500">({infoWaktu.tanggal})</span>}
+                            </p>
+                            <p className="text-[9px] font-mono text-slate-500">Est. ~{idx * 3} mnt</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            lewatiAntrean(item.nomor_antrean);
+                          }}
+                          className="bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white text-[10px] font-extrabold px-2.5 py-1.5 rounded-lg border border-amber-500/30 transition cursor-pointer"
+                        >
+                          SKIP
+                        </button>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -1026,25 +1117,31 @@ export default function AdminPage() {
                     <p>{pencarian ? "Nomor tidak ditemukan" : "Tidak ada antrean yang dilewati."}</p>
                   </div>
                 ) : (
-                  daftarDilewatiFiltered.map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl flex items-center justify-between"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <span className={`text-xs font-black px-2.5 py-1 rounded-md border ${getBadgeWarna(item.nomor_antrean)}`}>
-                          {item.nomor_antrean}
-                        </span>
-                        <p className="text-[11px] text-slate-400">Dilewati</p>
-                      </div>
-                      <button
-                        onClick={() => kirimPanggilan(item.nomor_antrean)}
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold px-3.5 py-1.5 rounded-lg transition shadow cursor-pointer"
+                  daftarDilewatiFiltered.map((item) => {
+                    const infoWaktu = formatWaktuTiket(item.waktu_panggil);
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl flex items-center justify-between"
                       >
-                        PANGGIL
-                      </button>
-                    </div>
-                  ))
+                        <div className="flex items-center space-x-3">
+                          <span className={`text-xs font-black px-2.5 py-1 rounded-md border ${getBadgeWarna(item.nomor_antrean)}`}>
+                            {item.nomor_antrean}
+                          </span>
+                          <div>
+                            <p className="text-[11px] text-slate-300 font-semibold">{infoWaktu.jam}</p>
+                            <p className="text-[9px] text-slate-500">Dilewati</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => kirimPanggilan(item.nomor_antrean)}
+                          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold px-3.5 py-1.5 rounded-lg transition shadow cursor-pointer"
+                        >
+                          PANGGIL
+                        </button>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}

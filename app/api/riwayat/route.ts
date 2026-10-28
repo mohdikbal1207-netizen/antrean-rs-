@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { Pool } from 'pg';
 
-// Mencegah pembuatan pool baru secara berulang saat Next.js melakukan hot-reload di mode development
+// Mencegah pembuatan pool baru secara berulang saat Next.js hot-reload di mode development
 const globalForPool = globalThis as unknown as { pgPool: Pool };
 
 const pool =
@@ -18,7 +18,7 @@ if (process.env.NODE_ENV !== 'production') globalForPool.pgPool = pool;
 export async function GET(request: NextRequest) {
   let client;
 
-  // Ambil parameter opsional limit pada URL (default 5 riwayat terakhir)
+  // Parameter limit opsional (default 5 riwayat terakhir)
   const searchParams = request.nextUrl.searchParams;
   const limitParam = searchParams.get('limit');
   let limitValue = limitParam ? parseInt(limitParam, 10) : 5;
@@ -26,10 +26,9 @@ export async function GET(request: NextRequest) {
   if (limitValue > 20) limitValue = 20;
 
   try {
-    // Ambil koneksi dari pool
     client = await pool.connect();
 
-    // Query untuk mengambil riwayat panggilan hari ini (WIB) yang sudah dipanggil (loket != '0')
+    // Query riwayat panggilan hari ini (WIB) yang valid dipanggil ke loket (bukan '0', NULL, atau 'SKIP')
     const queryText = `
       SELECT 
         id,
@@ -37,7 +36,8 @@ export async function GET(request: NextRequest) {
         loket,
         waktu_panggil
       FROM antrean 
-      WHERE UPPER(loket) != '0' 
+      WHERE UPPER(loket) NOT IN ('0', 'SKIP') 
+        AND loket IS NOT NULL
         AND (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date 
       ORDER BY id DESC 
       LIMIT $1
@@ -45,7 +45,6 @@ export async function GET(request: NextRequest) {
 
     const result = await client.query(queryText, [limitValue]);
 
-    // Kirim respons JSON dengan header anti-caching real-time
     return NextResponse.json(
       {
         success: true,
@@ -74,12 +73,12 @@ export async function GET(request: NextRequest) {
       { 
         success: false, 
         message: 'Gagal memuat riwayat antrean dari database',
+        error_detail: error?.message || null,
         data: [] 
       },
       { status: 500 }
     );
   } finally {
-    // Selalu kembalikan client ke pool agar tidak terjadi kebocoran koneksi
     if (client) {
       client.release();
     }
