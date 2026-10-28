@@ -5,8 +5,7 @@ const nextConfig: NextConfig = {
   experimental: {
     agentFeedback: true,
   },
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Hapus/matikan opsi cacheComponents dan partialPrefetching
   turbopack: {
     rules: {
       "*.css": {

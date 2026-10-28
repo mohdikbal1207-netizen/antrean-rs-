@@ -1,7 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { Pool } from 'pg';
 
-// Mencegah pembuatan pool baru secara berulang saat Next.js melakukan hot-reload di mode development
 const globalForPool = globalThis as unknown as { pgPool: Pool };
 
 const pool =
@@ -23,7 +22,6 @@ export async function POST(req: NextRequest) {
     const kategori = body.kategori || 'A';
     const kat = kategori.toUpperCase().trim();
 
-    // Validasi kategori huruf yang diizinkan (misal: A, B, C, P)
     if (!/^[A-Z]$/.test(kat)) {
       return NextResponse.json(
         { success: false, message: 'Format kategori antrean tidak valid' },
@@ -31,13 +29,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ambil koneksi dari pool
     client = await pool.connect();
 
     // Memulai Transaksi Database untuk Mencegah Race Condition (Nomor Ganda)
     await client.query('BEGIN');
 
-    // 1. Hitung antrean terakhir hari ini berdasarkan kategori dengan penguncian baris (FOR UPDATE)
+    // 1. Hitung antrean terakhir HARI INI berdasarkan kategori (Menggunakan waktu_panggil)
     const queryHitung = `
       SELECT nomor_antrean FROM antrean 
       WHERE UPPER(nomor_antrean) LIKE $1 
@@ -61,19 +58,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Format nomor antrean: A-001, B-001, C-001
     const nomorTiketBaru = `${kat}-${String(nomorUrut).padStart(3, '0')}`;
 
-    // 2. Simpan tiket baru ke database Neon (loket '0' = belum dipanggil)
+    // 2. Simpan tiket baru ke database Neon 
+    // loket '0' = MENUNGGU, waktu_panggil dipaksa ke WIB agar filter tanggalnya sinkron
     const queryInsert = `
       INSERT INTO antrean (nomor_antrean, loket, waktu_panggil) 
-      VALUES ($1, $2, CURRENT_TIMESTAMP)
-      RETURNING id, nomor_antrean, waktu_panggil
+      VALUES ($1, '0', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')
+      RETURNING id, nomor_antrean, loket, waktu_panggil
     `;
     
-    const resInsert = await client.query(queryInsert, [nomorTiketBaru, '0']);
+    const resInsert = await client.query(queryInsert, [nomorTiketBaru]);
 
-    // Commit transaksi jika berhasil
+    // Commit transaksi jika semua sukses
     await client.query('COMMIT');
 
     return NextResponse.json(
@@ -88,7 +85,6 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error: any) {
-    // Rollback transaksi jika terjadi kegagalan agar database tetap konsisten
     if (client) {
       try {
         await client.query('ROLLBACK');
@@ -97,21 +93,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
-      console.error('Database Connection Timeout/Error (RSUD Bukit Kerman):', error.message);
-    } else {
-      console.error('Error API Cetak Tiket:', error);
-    }
+    console.error('CRITICAL ERROR API CETAK KIOSK:', error);
 
     return NextResponse.json(
       { 
         success: false, 
-        message: 'Gagal memproses tiket ke database' 
+        message: 'Gagal memproses tiket ke database',
+        error_detail: error?.message || null 
       },
       { status: 500 }
     );
   } finally {
-    // Selalu kembalikan client ke pool agar tidak terjadi kebocoran koneksi
     if (client) {
       client.release();
     }

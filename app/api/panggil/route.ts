@@ -16,12 +16,12 @@ const pool =
 
 if (process.env.NODE_ENV !== 'production') globalForPool.pgPool = pool;
 
-// Inisialisasi Pusher Server
+// Inisialisasi Pusher Server (Pastikan variabel env sudah terpasang)
 const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID!,
-  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
-  secret: process.env.PUSHER_SECRET!,
-  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+  appId: process.env.PUSHER_APP_ID || '',
+  key: process.env.NEXT_PUBLIC_PUSHER_KEY || '',
+  secret: process.env.PUSHER_SECRET || '',
+  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || '',
   useTLS: true,
 });
 
@@ -43,22 +43,26 @@ export async function POST(req: NextRequest) {
     // Ambil koneksi dari pool
     client = await pool.connect();
 
-    // 1. Simpan riwayat panggilan ke database Neon dengan zona waktu WIB (Asia/Jakarta)
+    // 1. Simpan/Update status panggilan ke database Neon (Waktu dipaksa ke WIB)
     const queryInsert = `
       INSERT INTO antrean (nomor_antrean, loket, waktu_panggil) 
-      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')
       RETURNING id, nomor_antrean, loket, waktu_panggil
     `;
 
     const resultInsert = await client.query(queryInsert, [nomor, loket]);
 
-    // 2. Kirim sinyal real-time ke Pusher agar layar Kiosk/Display merespons
-    await pusher.trigger('antrean-channel', 'event-panggil', {
-      id: resultInsert.rows[0]?.id,
-      nomor_antrean: nomor,
-      loket: loket,
-      waktu_panggil: resultInsert.rows[0]?.waktu_panggil,
-    });
+    // 2. Kirim sinyal real-time ke Pusher (Bungkus try-catch agar tidak membuat API crash jika Pusher gagal terhubung)
+    try {
+      await pusher.trigger('antrean-channel', 'event-panggil', {
+        id: resultInsert.rows[0]?.id,
+        nomor_antrean: nomor,
+        loket: loket,
+        waktu_panggil: resultInsert.rows[0]?.waktu_panggil,
+      });
+    } catch (pusherErr) {
+      console.error('Warning Pusher Trigger Error:', pusherErr);
+    }
 
     return NextResponse.json(
       {
@@ -71,21 +75,17 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error: any) {
-    if (error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
-      console.error('Database Connection Timeout/Error (RSUD Bukit Kerman):', error.message);
-    } else {
-      console.error('Error API Panggil Antrean:', error);
-    }
+    console.error('Error API Panggil Antrean:', error);
 
     return NextResponse.json(
       { 
         success: false, 
-        message: 'Gagal memproses panggilan antrean ke database' 
+        message: 'Gagal memproses panggilan antrean ke database',
+        error_detail: error?.message || null
       },
       { status: 500 }
     );
   } finally {
-    // Selalu kembalikan client ke pool agar tidak terjadi leakage koneksi
     if (client) {
       client.release();
     }

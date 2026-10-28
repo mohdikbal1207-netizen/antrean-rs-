@@ -1,7 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { Pool } from 'pg';
 
-// Mencegah pembuatan pool baru secara berulang saat Next.js melakukan hot-reload di mode development
 const globalForPool = globalThis as unknown as { pgPool: Pool };
 
 const pool =
@@ -19,21 +18,16 @@ export async function POST(request: NextRequest) {
   let client;
 
   try {
-    // Ambil koneksi dari pool
     client = await pool.connect();
 
-    // Query penghapusan data antrean hari ini berdasarkan Zona Waktu WIB (Asia/Jakarta)
-    const queryDelete = `
-      DELETE FROM antrean 
-      WHERE (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
-    `;
-
+    // Karena struktur tabel 4 kolom, reset harian membersihkan seluruh isi tabel antrean
+    const queryDelete = `DELETE FROM antrean`;
     const result = await client.query(queryDelete);
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Seluruh data antrean hari ini berhasil direset.',
+        message: 'Seluruh data antrean berhasil direset.',
         deleted_count: result.rowCount,
         timestamp: new Date().toISOString(),
       },
@@ -41,21 +35,17 @@ export async function POST(request: NextRequest) {
     );
 
   } catch (error: any) {
-    if (error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
-      console.error('Database Connection Timeout/Error (RSUD Bukit Kerman):', error.message);
-    } else {
-      console.error('Error API Reset Antrean:', error);
-    }
+    console.error('Error API Reset Antrean:', error);
 
     return NextResponse.json(
       { 
         success: false, 
-        message: 'Gagal mereset data antrean dari database' 
+        message: 'Gagal mereset data antrean dari database',
+        error_detail: error?.message || null
       },
       { status: 500 }
     );
   } finally {
-    // Selalu kembalikan client ke pool agar tidak terjadi kebocoran koneksi
     if (client) {
       client.release();
     }
