@@ -31,23 +31,32 @@ function terbilang(n: number): string {
     "sebelas",
   ];
 
+  let hasil = "";
+
   if (n < 12) {
-    return satuan[n];
+    hasil = satuan[n];
   } else if (n < 20) {
-    return terbilang(n - 10) + " belas";
+    hasil = terbilang(n - 10) + " belas";
   } else if (n < 100) {
-    return (terbilang(Math.floor(n / 10)) + " puluh " + terbilang(n % 10)).trim();
+    const sisa = n % 10;
+    hasil = terbilang(Math.floor(n / 10)) + " puluh" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else if (n < 200) {
-    return ("seratus " + terbilang(n % 100)).trim();
+    const sisa = n % 100;
+    hasil = "seratus" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else if (n < 1000) {
-    return (terbilang(Math.floor(n / 100)) + " ratus " + terbilang(n % 100)).trim();
+    const sisa = n % 100;
+    hasil = terbilang(Math.floor(n / 100)) + " ratus" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else if (n < 2000) {
-    return ("seribu " + terbilang(n % 1000)).trim();
+    const sisa = n % 1000;
+    hasil = "seribu" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else if (n < 1000000) {
-    return (terbilang(Math.floor(n / 1000)) + " ribu " + terbilang(n % 1000)).trim();
+    const sisa = n % 1000;
+    hasil = terbilang(Math.floor(n / 1000)) + " ribu" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else {
-    return n.toString();
+    hasil = n.toString();
   }
+
+  return hasil.replace(/\s+/g, " ").trim();
 }
 
 function formatNomorAntreanTTS(nomorAntrean: string): string {
