@@ -20,7 +20,6 @@ interface LogAksiItem {
 // FUNGSI TERBILANG BAHASA INDONESIA LENGKAP
 // ==========================================
 
-// Konversi angka menjadi sebutan terbilang alami (satuan, belasan, puluhan, ratusan, ribuan, jutaan)
 function terbilang(n: number): string {
   if (n === 0) return "nol";
 
@@ -39,26 +38,34 @@ function terbilang(n: number): string {
     "sebelas",
   ];
 
+  let hasil = "";
+
   if (n < 12) {
-    return satuan[n];
+    hasil = satuan[n];
   } else if (n < 20) {
-    return terbilang(n - 10) + " belas";
+    hasil = terbilang(n - 10) + " belas";
   } else if (n < 100) {
-    return (terbilang(Math.floor(n / 10)) + " puluh " + terbilang(n % 10)).trim();
+    const sisa = n % 10;
+    hasil = terbilang(Math.floor(n / 10)) + " puluh" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else if (n < 200) {
-    return ("seratus " + terbilang(n % 100)).trim();
+    const sisa = n % 100;
+    hasil = "seratus" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else if (n < 1000) {
-    return (terbilang(Math.floor(n / 100)) + " ratus " + terbilang(n % 100)).trim();
+    const sisa = n % 100;
+    hasil = terbilang(Math.floor(n / 100)) + " ratus" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else if (n < 2000) {
-    return ("seribu " + terbilang(n % 1000)).trim();
+    const sisa = n % 1000;
+    hasil = "seribu" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else if (n < 1000000) {
-    return (terbilang(Math.floor(n / 1000)) + " ribu " + terbilang(n % 1000)).trim();
+    const sisa = n % 1000;
+    hasil = terbilang(Math.floor(n / 1000)) + " ribu" + (sisa !== 0 ? " " + terbilang(sisa) : "");
   } else {
-    return n.toString();
+    hasil = n.toString();
   }
+
+  return hasil.replace(/\s+/g, " ").trim();
 }
 
-// Format nomor antrean agar dibaca jelas oleh TTS (contoh: "A-011" -> "A, sebelas", "B-1250" -> "B, seribu dua ratus lima puluh")
 function formatNomorAntreanTTS(nomorAntrean: string): string {
   if (!nomorAntrean) return "";
 
@@ -67,7 +74,7 @@ function formatNomorAntreanTTS(nomorAntrean: string): string {
 
   if (match) {
     const kodeHuruf = match[1];
-    const angkaInt = parseInt(match[2], 10); // Menghilangkan 0 di depan
+    const angkaInt = parseInt(match[2], 10);
     const sebutanAngka = terbilang(angkaInt);
 
     return `${kodeHuruf}, ${sebutanAngka}`;
@@ -90,29 +97,25 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [pencarian, setPencarian] = useState("");
 
-  // State Notifikasi Toast, Jam Real-Time, & Filter Kategori
   const [notifikasi, setNotifikasi] = useState<string | null>(null);
   const [waktu, setWaktu] = useState<string>("");
+  const [tanggalLengkap, setTanggalLengkap] = useState<string>("");
   const [hanyaKategoriIni, setHanyaKategoriIni] = useState(false);
 
-  // UI/UX: Counter Pelayanan, Toggle Suara, Status Server & Modal Shortcut
   const [totalSelesai, setTotalSelesai] = useState<number>(0);
   const [suaraAktif, setSuaraAktif] = useState<boolean>(true);
   const [jumlahRecall, setJumlahRecall] = useState<number>(1);
   const [showShortcutModal, setShowShortcutModal] = useState<boolean>(false);
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
-  // Durasi Pelayanan Pasien & Control Polling
   const [durasiPelayanan, setDurasiPelayanan] = useState<number>(0);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
 
-  // TTS Voice Caller, Session Activity Log, Fullscreen & Log Modal
   const [suaraTTS, setSuaraTTS] = useState<boolean>(true);
   const [riwayatLog, setRiwayatLog] = useState<LogAksiItem[]>([]);
   const [showLogModal, setShowLogModal] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
-  // Fungsi Pembantu Pencatat Log Aktivitas Sesi Ini
   const tambahLog = (pesan: string, tipe: LogAksiItem["tipe"]) => {
     const logBaru: LogAksiItem = {
       id: Math.random().toString(36).substring(2, 9),
@@ -120,24 +123,22 @@ export default function AdminPage() {
       pesan,
       tipe,
     };
-    setRiwayatLog((prev) => [logBaru, ...prev.slice(0, 49)]); // Simpan 50 log terakhir
+    setRiwayatLog((prev) => [logBaru, ...prev.slice(0, 49)]);
   };
 
-  // Efek Suara Voice Text-To-Speech Bahasa Indonesia
   const ulasSuaraTTS = (nomorAntrean: string, targetLoket: string) => {
     if (!suaraTTS || typeof window === "undefined" || !("speechSynthesis" in window)) return;
     try {
-      window.speechSynthesis.cancel(); // Hentikan antrean suara sebelumnya
+      window.speechSynthesis.cancel();
 
       const sebutanJelas = formatNomorAntreanTTS(nomorAntrean);
       const teksPengumuman = `Nomor antrean ${sebutanJelas}, silakan menuju ke loket ${targetLoket}`;
       
       const utterance = new SpeechSynthesisUtterance(teksPengumuman);
       utterance.lang = "id-ID";
-      utterance.rate = 0.85; // Kecepatan disesuaikan agar artikulasi suara alami & jelas
+      utterance.rate = 0.85;
       utterance.pitch = 1.0;
 
-      // Utamakan penggunaan vokal Bahasa Indonesia jika tersedia di browser
       const voices = window.speechSynthesis.getVoices();
       const indonesianVoice = voices.find((v) => v.lang.includes("id") || v.lang.includes("ID"));
       if (indonesianVoice) {
@@ -150,7 +151,6 @@ export default function AdminPage() {
     }
   };
 
-  // Efek Suara Chime Panggilan (Web Audio API Synthesizer)
   const bunyikanChime = () => {
     if (!suaraAktif) return;
     try {
@@ -169,11 +169,10 @@ export default function AdminPage() {
       osc.start();
       osc.stop(ctx.currentTime + 0.4);
     } catch (e) {
-      // Audio fallback silent ignore
+      // Audio fallback
     }
   };
 
-  // Fungsi pembantu pesan Toast Notifikasi & Trigger Suara
   const tampilkanToast = (pesan: string, nomorAntreanTts?: string) => {
     setNotifikasi(pesan);
     bunyikanChime();
@@ -185,7 +184,6 @@ export default function AdminPage() {
     }, 3200);
   };
 
-  // Toggle Mode Fullscreen Browser
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
@@ -196,7 +194,6 @@ export default function AdminPage() {
     }
   };
 
-  // Ekspor Ringkasan Log Sesi ke CSV
   const eksporLogCSV = () => {
     if (riwayatLog.length === 0) {
       alert("Belum ada riwayat aktivitas pada sesi ini.");
@@ -215,7 +212,6 @@ export default function AdminPage() {
     document.body.removeChild(link);
   };
 
-  // Timer Durasi Pelayanan Pasien yang Sedang Dipanggil
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (terakhirDipanggil) {
@@ -234,9 +230,9 @@ export default function AdminPage() {
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Update Jam Digital Real-time & Status Koneksi
+  // Update Jam & Tanggal Digital Real-time
   useEffect(() => {
-    const timer = setInterval(() => {
+    const updateDateTime = () => {
       const now = new Date();
       setWaktu(
         now.toLocaleTimeString("id-ID", {
@@ -245,7 +241,18 @@ export default function AdminPage() {
           second: "2-digit",
         })
       );
-    }, 1000);
+      setTanggalLengkap(
+        now.toLocaleDateString("id-ID", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      );
+    };
+
+    updateDateTime();
+    const timer = setInterval(updateDateTime, 1000);
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -260,7 +267,6 @@ export default function AdminPage() {
     };
   }, []);
 
-  // Pemetaan Kategori berdasarkan Loket RSUD Bukit Kerman
   const getKategoriLoket = (loketId: string) => {
     switch (loketId) {
       case "1":
@@ -276,7 +282,6 @@ export default function AdminPage() {
 
   const kategoriAktif = getKategoriLoket(loket);
 
-  // Pewarna Badge Kode Antrean
   const getBadgeWarna = (nomorAntrean: string) => {
     if (nomorAntrean.startsWith("A")) return "bg-blue-900/40 text-blue-300 border-blue-700/40";
     if (nomorAntrean.startsWith("B")) return "bg-emerald-900/40 text-emerald-300 border-emerald-700/40";
@@ -285,7 +290,6 @@ export default function AdminPage() {
     return "bg-slate-800 text-slate-300 border-slate-700";
   };
 
-  // Format Pembantu Tampilan Jam & Tanggal Tiket
   const formatWaktuTiket = (isoString?: string) => {
     if (!isoString) return { jam: "Pilih nomor", tanggal: "" };
     try {
@@ -510,7 +514,6 @@ export default function AdminPage() {
     kirimPanggilan(nomor);
   };
 
-  // Pintas Keyboard Lengkap (Alt+N, Alt+R, Alt+S, Alt+D, Alt+K, Alt+M)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (["INPUT", "SELECT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
@@ -539,7 +542,6 @@ export default function AdminPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [terakhirDipanggil, loket, jumlahRecall]);
 
-  // Filter antrean berdasarkan pencarian & kategori aktif
   const filterKategoriFn = (item: AntreanItem) => {
     if (hanyaKategoriIni) {
       return item.nomor_antrean.startsWith(kategoriAktif.kode);
@@ -558,7 +560,6 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen w-full bg-slate-950 text-white flex flex-col font-sans select-none relative">
       
-      {/* Toast Notification Floating Alert */}
       {notifikasi && (
         <div className="fixed top-20 right-6 z-50 bg-blue-600 border border-blue-400 text-white font-bold px-5 py-3 rounded-2xl shadow-2xl animate-bounce flex items-center space-x-2">
           <span className="text-xl">🔔</span>
@@ -566,7 +567,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Modal Bantuan Pintasan Keyboard (Alt + K) */}
       {showShortcutModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 p-6 md:p-8 rounded-3xl max-w-lg w-full shadow-2xl space-y-4">
@@ -613,7 +613,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Modal Riwayat Aktivitas Sesi (Log Viewer) */}
       {showLogModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 p-6 rounded-3xl max-w-2xl w-full shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
@@ -674,7 +673,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Header Bar Layar Penuh */}
       <header className="w-full bg-slate-900/90 border-b border-slate-800 px-6 py-4 flex flex-wrap items-center justify-between gap-4 backdrop-blur sticky top-0 z-40">
         <div className="flex items-center space-x-4">
           <div className="bg-gradient-to-tr from-blue-700 to-blue-500 text-white font-black px-3.5 py-2 rounded-xl text-xl tracking-wider shadow-lg shadow-blue-900/30 border border-blue-400/30">
@@ -694,17 +692,19 @@ export default function AdminPage() {
         </div>
 
         <div className="flex items-center space-x-2.5">
-          {/* Status Live Server & Clock */}
+          {/* Tampilan Hari, Tanggal, Jam & Status Sync */}
           <div className="hidden lg:flex items-center space-x-3 bg-slate-950 border border-slate-800 px-4 py-2 rounded-xl">
             <div className="flex items-center space-x-1.5">
               <span className={`w-2 h-2 rounded-full ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}></span>
               <span className="text-[11px] font-bold text-slate-400 uppercase">{isOnline ? "Live Sync" : "Offline"}</span>
             </div>
             <span className="text-slate-700">|</span>
-            <p className="text-sm font-mono font-black text-yellow-400 tracking-wider">{waktu || "00:00:00"}</p>
+            <div className="flex flex-col text-right">
+              <span className="text-[11px] font-bold text-slate-300">{tanggalLengkap || "Memuat tanggal..."}</span>
+              <span className="text-xs font-mono font-black text-yellow-400 tracking-wider">{waktu || "00:00:00"} WIB</span>
+            </div>
           </div>
 
-          {/* Toggle Auto Sync Polling */}
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             title="Toggle Pembaruan Otomatis 5s"
@@ -715,7 +715,6 @@ export default function AdminPage() {
             {autoRefresh ? "🔄 Sync 5s" : "⏸️ Paused"}
           </button>
 
-          {/* Toggle Suara TTS Voice */}
           <button
             onClick={() => setSuaraTTS(!suaraTTS)}
             title="Toggle Suara TTS Pemanggil"
@@ -728,7 +727,6 @@ export default function AdminPage() {
             <span>{suaraTTS ? "🗣️ Voice ON" : "🗣️ Voice OFF"}</span>
           </button>
 
-          {/* Toggle Suara Chime Mute/Unmute */}
           <button
             onClick={() => setSuaraAktif(!suaraAktif)}
             title="Toggle Suara Chime Panggilan (Alt + M)"
@@ -741,7 +739,6 @@ export default function AdminPage() {
             <span>{suaraAktif ? "🔊 Chime" : "🔇 Mute"}</span>
           </button>
 
-          {/* Tombol Riwayat Log Sesi */}
           <button
             onClick={() => setShowLogModal(true)}
             className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold p-2.5 rounded-xl border border-slate-700 transition flex items-center gap-1 cursor-pointer"
@@ -750,7 +747,6 @@ export default function AdminPage() {
             <span>📜 Log</span>
           </button>
 
-          {/* Tombol Fullscreen Mode */}
           <button
             onClick={toggleFullscreen}
             className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold p-2.5 rounded-xl border border-slate-700 transition flex items-center gap-1 cursor-pointer"
@@ -759,7 +755,6 @@ export default function AdminPage() {
             <span>{isFullscreen ? "↙️ Restore" : "⛶ Full"}</span>
           </button>
 
-          {/* Tombol Panduan Shortcut */}
           <button
             onClick={() => setShowShortcutModal(true)}
             className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-700 transition flex items-center gap-1 cursor-pointer"
@@ -794,13 +789,10 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Main Container Layout Grid Layar Penuh */}
       <main className="flex-1 p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-[1920px] mx-auto">
         
-        {/* Panel Utama Kontrol Pemanggil Antrean (8 Columns) */}
         <div className="lg:col-span-8 bg-slate-900/80 border border-slate-800 p-6 md:p-8 rounded-3xl shadow-2xl flex flex-col justify-between">
           <div>
-            {/* Quick Switcher Loket Cepat */}
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pilihan Loket Cepat:</span>
               <div className="flex gap-2">
@@ -821,7 +813,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Mini Cards Statistik Lengkap 4 Kolom */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-6">
               <div className={`border p-4 rounded-2xl text-center ${kategoriAktif.warna}`}>
                 <p className="text-[11px] uppercase font-bold opacity-80">Kategori Aktif</p>
@@ -841,7 +832,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Tombol Utama Auto-Next + Panduan Pintas Keyboard */}
             <div className="relative mb-6">
               <button
                 onClick={panggilSelanjutnya}
@@ -855,7 +845,6 @@ export default function AdminPage() {
               </span>
             </div>
 
-            {/* Form Panggil Manual & Pengaturan Loket */}
             <form onSubmit={panggilBaru} className="space-y-5 border-t border-slate-800 pt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -931,7 +920,6 @@ export default function AdminPage() {
             </form>
           </div>
 
-          {/* Kotak Antrean Terakhir Dipanggil & Durasi Pelayanan Real-Time */}
           {terakhirDipanggil && (
             <div className="mt-6 pt-5 border-t border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-950/70 p-5 rounded-2xl border border-slate-800 shadow-inner">
               <div>
@@ -943,7 +931,6 @@ export default function AdminPage() {
                       Dipanggil {jumlahRecall}x
                     </span>
                   )}
-                  {/* Timer Durasi Pelayanan */}
                   <span className="text-[11px] bg-blue-950 text-blue-300 border border-blue-700/50 px-2 py-0.5 rounded font-mono font-bold">
                     ⏱️ {formatDurasi(durasiPelayanan)}
                   </span>
@@ -961,7 +948,6 @@ export default function AdminPage() {
                   <span className="opacity-70 text-[10px]">(Alt+D)</span>
                 </button>
 
-                {/* Fitur Multi-Oper: Kirim ke Kasir (B) atau Farmasi (C) */}
                 <button
                   onClick={() => transferAntrean("B")}
                   className="bg-blue-900/40 hover:bg-blue-600 text-blue-200 border border-blue-500/40 text-xs font-extrabold px-3.5 py-3 rounded-xl transition cursor-pointer"
@@ -998,10 +984,8 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* Sidebar Daftar Antrean (4 Columns) */}
         <div className="lg:col-span-4 bg-slate-900/80 border border-slate-800 p-6 rounded-3xl shadow-2xl flex flex-col justify-between h-full min-h-[550px]">
           <div>
-            {/* Header Tab Pilihan */}
             <div className="flex border-b border-slate-800 mb-4 pb-3 gap-2">
               <button
                 onClick={() => setTabAktif("menunggu")}
@@ -1025,7 +1009,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Indikator Peringatan Lonjakan Beban Antrean (Peak Hour Alert > 15 Pasien) */}
             {daftarMenunggu.length > 15 && (
               <div className="mb-3 bg-rose-950/60 border border-rose-700/50 p-2.5 rounded-xl flex items-center space-x-2 text-rose-300 text-xs font-bold animate-pulse">
                 <span>⚠️</span>
@@ -1033,7 +1016,6 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Opsi Toggle Filter Kategori Loket Ini */}
             <div className="flex items-center justify-between mb-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
               <span className="text-xs font-semibold text-slate-300">
                 Filter Kategori {kategoriAktif.kode} Saja
@@ -1053,7 +1035,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Input Pencarian Cepat */}
             <div className="mb-4">
               <input
                 type="text"
@@ -1064,7 +1045,6 @@ export default function AdminPage() {
               />
             </div>
 
-            {/* Konten Tab Antrean Menunggu */}
             {tabAktif === "menunggu" && (
               <div className="space-y-2.5 max-h-[calc(100vh-340px)] min-h-[300px] overflow-y-auto pr-1">
                 {daftarMenungguFiltered.length === 0 ? (
@@ -1108,7 +1088,6 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Konten Tab Antrean Dilewati */}
             {tabAktif === "dilewati" && (
               <div className="space-y-2.5 max-h-[calc(100vh-340px)] min-h-[300px] overflow-y-auto pr-1">
                 {daftarDilewatiFiltered.length === 0 ? (

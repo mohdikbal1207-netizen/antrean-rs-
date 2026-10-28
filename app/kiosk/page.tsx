@@ -71,6 +71,7 @@ export default function KioskPage() {
   const [antrean, setAntrean] = useState<AntreanData>({ nomor: "---", loket: "-" });
   const [riwayat, setRiwayat] = useState<AntreanData[]>([]);
   const [waktu, setWaktu] = useState<string>("");
+  const [tanggalLengkap, setTanggalLengkap] = useState<string>("");
   const [loadingCetak, setLoadingCetak] = useState(false);
   const [kategoriLoading, setKategoriLoading] = useState<string | null>(null);
   const [tiketBaru, setTiketBaru] = useState<{ nomor: string; waktu: string } | null>(null);
@@ -129,8 +130,9 @@ export default function KioskPage() {
     }
   };
 
+  // Update Jam & Tanggal Digital Real-time
   useEffect(() => {
-    const timer = setInterval(() => {
+    const updateDateTime = () => {
       const now = new Date();
       setWaktu(
         now.toLocaleTimeString("id-ID", {
@@ -139,13 +141,24 @@ export default function KioskPage() {
           second: "2-digit",
         })
       );
+      setTanggalLengkap(
+        now.toLocaleDateString("id-ID", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      );
 
       if (now.getHours() === 0 && now.getMinutes() === 0 && now.getSeconds() === 0) {
         setAntrean({ nomor: "---", loket: "-" });
         setRiwayat([]);
         setTotalTiketHariIni(0);
       }
-    }, 1000);
+    };
+
+    updateDateTime();
+    const timer = setInterval(updateDateTime, 1000);
 
     const timerRunning = setInterval(() => {
       setRunningIndex((prev) => (prev + 1) % pesanInformasi.length);
@@ -627,11 +640,16 @@ export default function KioskPage() {
             <span>{isDarkMode ? "☀️ Mode Terang" : "🌙 Mode Gelap"}</span>
           </button>
 
+          {/* Tampilan Hari, Tanggal, & Jam WIB */}
           <div className={`border-2 px-5 py-2 rounded-2xl text-right shadow-md ${
             isDarkMode ? "bg-black border-yellow-400" : "bg-slate-950 border-blue-600 text-white"
           }`}>
-            <p className="text-[10px] text-yellow-400 font-black uppercase tracking-widest">Waktu WIB</p>
-            <p className="text-2xl font-mono font-black text-yellow-300 tracking-wider">{waktu || "00:00:00"}</p>
+            <p className="text-[10px] text-yellow-400 font-black uppercase tracking-widest">
+              {tanggalLengkap || "Waktu WIB"}
+            </p>
+            <p className="text-2xl font-mono font-black text-yellow-300 tracking-wider">
+              {waktu || "00:00:00"} <span className="text-xs font-sans">WIB</span>
+            </p>
           </div>
         </div>
       </header>
