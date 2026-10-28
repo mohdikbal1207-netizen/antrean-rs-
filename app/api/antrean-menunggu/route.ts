@@ -37,6 +37,13 @@ export async function GET(request: NextRequest) {
   try {
     client = await pool.connect();
 
+    // 🔄 AUTO-RESET OTOMATIS: 
+    // Menghapus data antrean dari hari sebelumnya berdasarkan tanggal pada waktu_panggil (WIB)
+    await client.query(`
+      DELETE FROM antrean 
+      WHERE (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
+    `);
+
     let kategoriConditionData = '';
     let kategoriConditionCount = '';
     
@@ -51,7 +58,7 @@ export async function GET(request: NextRequest) {
       queryParamsCount.push(`${kategoriParam.toUpperCase()}%`);
     }
 
-    // Query diperbaiki: Menghapus filter created_at karena kolom tersebut tidak ada di database Neon
+    // Query antrean MENUNGGU (Hanya memfilter tanggal hari ini dari waktu_panggil)
     const queryData = `
       SELECT 
         id, 
@@ -60,6 +67,7 @@ export async function GET(request: NextRequest) {
         waktu_panggil
       FROM antrean 
       WHERE (loket = '0' OR loket IS NULL OR UPPER(loket) != 'SKIP')
+        AND (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
         ${kategoriConditionData}
       ORDER BY id ASC
       LIMIT $1 OFFSET $2
@@ -69,6 +77,7 @@ export async function GET(request: NextRequest) {
       SELECT COUNT(*) as total_hari_ini
       FROM antrean 
       WHERE (loket = '0' OR loket IS NULL OR UPPER(loket) != 'SKIP')
+        AND (waktu_panggil AT TIME ZONE 'Asia/Jakarta')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
         ${kategoriConditionCount}
     `;
 
